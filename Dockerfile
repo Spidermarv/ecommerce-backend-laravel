@@ -34,8 +34,9 @@ COPY --chown=www-data:www-data . /var/www/html
 # Set composer to allow superuser (required for Docker)
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Remove lock file and install fresh dependencies
-RUN rm -f composer.lock && composer update --no-dev --optimize-autoloader
+# Remove lock file and install dependencies without dev packages
+RUN rm -f composer.lock && \
+    composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
 # Generate application key
 RUN php artisan key:generate --force

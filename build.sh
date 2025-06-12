@@ -9,12 +9,8 @@ composer install --no-dev --optimize-autoloader --no-interaction
 echo "🔑 Generating application key..."
 php artisan key:generate --force
 
-echo "💾 Creating SQLite database..."
-touch /tmp/database.sqlite
-chmod 664 /tmp/database.sqlite
-
 echo "🗄️ Running database migrations..."
-php artisan migrate --force
+php artisan migrate --force # This will run against the production DB (e.g., PostgreSQL on Render)
 
 echo "🌱 Seeding database with sample data..."
 php artisan db:seed --force

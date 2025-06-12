@@ -31,11 +31,14 @@ COPY . /var/www/html
 # Copy existing application directory permissions
 COPY --chown=www-data:www-data . /var/www/html
 
-# Install dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Set composer to allow superuser (required for Docker)
+ENV COMPOSER_ALLOW_SUPERUSER=1
+
+# Remove lock file and install fresh dependencies
+RUN rm -f composer.lock && composer update --no-dev --optimize-autoloader
 
 # Generate application key
-RUN php artisan key:generate
+RUN php artisan key:generate --force
 
 # Create SQLite database
 RUN touch /var/www/html/database.sqlite

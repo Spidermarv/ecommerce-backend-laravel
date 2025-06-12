@@ -18,25 +18,24 @@ class OrderController extends Controller
      */
     public function store(Request $request)
     {
-        // This is a simplified example. Add authentication and more robust validation.
-        // For a real application, ensure the user is authenticated:
-        // $user = Auth::user();
-        // if (!$user) {
-        //     return response()->json(['message' => 'Unauthenticated.'], 401);
-        // }
-
-        $validator = Validator::make($request->all(), [
-            // 'user_id' is optional, if provided, it means a logged-in user is placing the order
-            'user_id' => 'nullable|exists:users,id',
-            'customer_name' => 'required_without:user_id|string|max:255',
-            'customer_email' => 'required_without:user_id|email|max:255',
+        $authenticatedUser = Auth::user();
+        $rules = [
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
-        ], [
-            'customer_name.required_without' => 'Customer name is required for guest orders.',
-            'customer_email.required_without' => 'Customer email is required for guest orders.',
-        ]);
+        ];
+
+        $messages = [];
+
+        if (!$authenticatedUser) {
+            // For guest users, customer details are required
+            $rules['customer_name'] = 'required|string|max:255';
+            $rules['customer_email'] = 'required|email|max:255';
+            $messages['customer_name.required'] = 'Customer name is required for guest orders.';
+            $messages['customer_email.required'] = 'Customer email is required for guest orders.';
+        }
+
+        $validator = Validator::make($request->all(), $rules, $messages);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
@@ -47,25 +46,41 @@ class OrderController extends Controller
             $totalAmount = 0;
             $orderItemsData = [];
 
+            $userId = null;
             $customerName = $request->customer_name;
             $customerEmail = $request->customer_email;
-            $userId = $request->user_id;
 
-            if ($userId && $user = \App\Models\User::find($userId)) {
-                $customerName = $user->name;
-                $customerEmail = $user->email;
+            if ($authenticatedUser) {
+                $userId = $authenticatedUser->id;
+                $customerName = $authenticatedUser->name;
+                $customerEmail = $authenticatedUser->email;
             }
 
             foreach ($request->items as $item) {
                 $product = Product::find($item['product_id']);
+
+                if (!$product) {
+                    // This should ideally not happen due to 'exists' validation, but as a safeguard:
+                    DB::rollBack();
+                    return response()->json(['message' => "Product with ID {$item['product_id']} not found."], 404);
+                }
+
+                // Check stock
+                if ($product->stock < $item['quantity']) {
+                    DB::rollBack();
+                    return response()->json(['message' => "Not enough stock for product: {$product->name}. Available: {$product->stock}, Requested: {$item['quantity']}."], 400);
+                }
+
                 $itemTotal = $product->price * $item['quantity'];
                 $totalAmount += $itemTotal;
                 $orderItemsData[] = [
                     'product_id' => $product->id,
                     'quantity' => $item['quantity'],
-                    'price' => $product->price,
+                    'price' => $product->price, // Price at the time of purchase
                 ];
             }
+
+            // All checks passed, now create order and then decrement stock
 
             $order = Order::create([
                 'user_id' => $userId,
@@ -76,6 +91,12 @@ class OrderController extends Controller
             ]);
 
             $order->items()->createMany($orderItemsData);
+
+            // Decrement stock after order items are successfully created
+            foreach ($request->items as $item) {
+                $product = Product::find($item['product_id']); // Find again to be safe, or use a collection from earlier
+                $product->decrement('stock', $item['quantity']);
+            }
 
             DB::commit();
             return response()->json($order->load('items'), 201);

@@ -21,7 +21,7 @@ class UserCrudController extends CrudController
 
     /**
      * Configure the CrudPanel object. Apply settings to all operations.
-     * 
+     *
      * @return void
      */
     public function setup()
@@ -33,45 +33,49 @@ class UserCrudController extends CrudController
 
     /**
      * Define what happens when the List operation is loaded.
-     * 
+     *
      * @see  https://backpackforlaravel.com/docs/crud-operation-list-entries
      * @return void
      */
     protected function setupListOperation()
     {
-        CRUD::setFromDb(); // set columns from db columns.
-
-        /**
-         * Columns can be defined using the fluent syntax:
-         * - CRUD::column('price')->type('number');
-         */
+        CRUD::column('id');
+        CRUD::column('name');
+        CRUD::column('email');
+        CRUD::column('email_verified_at')->label('Email Verified At');
+        CRUD::column('is_admin')->type('boolean')->label('Admin');
+        CRUD::column('created_at');
     }
 
     /**
      * Define what happens when the Create operation is loaded.
-     * 
+     *
      * @see https://backpackforlaravel.com/docs/crud-operation-create
      * @return void
      */
     protected function setupCreateOperation()
     {
         CRUD::setValidation(UserRequest::class);
-        CRUD::setFromDb(); // set fields from db columns.
-
-        /**
-         * Fields can be defined using the fluent syntax:
-         * - CRUD::field('price')->type('number');
-         */
+        CRUD::field('name')->type('text');
+        CRUD::field('email')->type('email');
+        CRUD::field('password')->type('password');
+        CRUD::field('is_admin')->type('boolean')->label('Is Admin?');
     }
 
     /**
      * Define what happens when the Update operation is loaded.
-     * 
+     *
      * @see https://backpackforlaravel.com/docs/crud-operation-update
      * @return void
      */
     protected function setupUpdateOperation()
     {
         $this->setupCreateOperation();
+        // For updates, you might want to make password optional or handle it differently
+        CRUD::modifyField('password', [
+            'label' => 'Password (leave blank to keep current)',
+            'validationRules' => 'nullable|min:8', // Example: make it nullable on update
+        ]);
+        // Ensure only admins can modify the is_admin flag if needed (requires custom logic or separate operation)
     }
 }

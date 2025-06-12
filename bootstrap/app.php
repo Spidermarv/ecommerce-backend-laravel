@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             // 'api/*', // Example: if your API routes are stateless and don't need CSRF
         ]);
+        $middleware->api(append: [
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
 
         // Your existing CORS middleware (or other global middleware)
         $middleware->append(HandleCors::class);

@@ -10,13 +10,14 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
-    libpq-dev # For PostgreSQL
+    sqlite3 \
+    libsqlite3-dev
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd # Added pdo_pgsql
+RUN docker-php-ext-install pdo_mysql pdo_sqlite mbstring exif pcntl bcmath gd
 
 # Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -33,19 +34,20 @@ COPY --chown=www-data:www-data . /var/www/html
 # Set composer to allow superuser (required for Docker)
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Install dependencies without dev packages (composer.lock should ideally be committed)
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+# Remove lock file and install dependencies without dev packages
+RUN rm -f composer.lock && \
+    composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# Application key should be set via environment variable in production.
-# If you must generate it in the image (not recommended for consistency),
-# ensure it's done only once or managed carefully.
-# RUN php artisan key:generate --force
+# Generate application key
+RUN php artisan key:generate --force
+
+# Create SQLite database
+RUN touch /var/www/html/database.sqlite
+RUN chmod 664 /var/www/html/database.sqlite
 
 # Run migrations and seeders
-# Migrations and seeding are better handled by the build.sh script or Render's deploy hooks
-# against the actual production database, not during image build.
-# RUN php artisan migrate --force
-# RUN php artisan db:seed --force
+RUN php artisan migrate --force
+RUN php artisan db:seed --force
 
 # Cache configuration
 RUN php artisan config:cache
@@ -56,10 +58,8 @@ RUN php artisan view:cache
 RUN chown -R www-data:www-data /var/www/html
 RUN chmod -R 755 /var/www/html/storage
 
-# Expose port (Render will set $PORT)
-# The EXPOSE instruction doesn't actually publish the port. It functions as a type of documentation.
-# To actually publish the port when running the container, use the -p flag on `docker run`.
-EXPOSE 8000 # Default Laravel port, Render will map its $PORT to this.
+# Expose port 8000
+EXPOSE 8000
 
 # Start the application
-CMD php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
+CMD php artisan serve --host=0.0.0.0 --port=$PORT
